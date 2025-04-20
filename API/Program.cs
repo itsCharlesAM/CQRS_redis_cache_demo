@@ -4,22 +4,30 @@ using Application;
 using System.Reflection;
 using MediatR;
 using Application.Queries;
+using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
 
 // Redis config
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = "redis:6379";
+    //options.Configuration = "redis:6379";
+    options.Configuration = "localhost:6379";
     options.InstanceName = "RedisDemo_";
 });
+
+
+// PostgreSQL EF Core setup
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Database"))
+);
 
 // Dependency Injection
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
@@ -41,5 +49,11 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();

@@ -1,3 +1,5 @@
+using Application.Commands;
+using Application.Interfaces;
 using Application.Queries;
 using Domain.Entities;
 using MediatR;
@@ -10,13 +12,22 @@ namespace API.Controllers
     public class ProductsController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly IProductRepository _productRepository;
 
-        public ProductsController(IMediator mediator)
+
+        public ProductsController(IMediator mediator, IProductRepository productRepository)
         {
             _mediator = mediator;
+            _productRepository = productRepository;
         }
 
 
+        [HttpPost]
+        public async Task<ActionResult<Product>> CreateProduct(CreateProductCommand command)
+        {
+            var product = await _mediator.Send(command);
+            return Ok(product);
+        }
 
 
         [HttpGet("{id}")]

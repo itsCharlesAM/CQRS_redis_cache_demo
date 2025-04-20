@@ -1,5 +1,6 @@
 ﻿using Application.Interfaces;
 using Domain.Entities;
+using Infrastructure.Data;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -17,10 +18,13 @@ namespace Infrastructure.Repositories
         };
 
         private readonly IDistributedCache _cache;
+        private readonly AppDbContext _context;
 
-        public ProductRepository(IDistributedCache cache)
+
+        public ProductRepository(IDistributedCache cache, AppDbContext context)
         {
             _cache = cache;
+            _context = context;
         }
 
         public Task<List<Product>> GetAllAsync()
@@ -35,7 +39,6 @@ namespace Infrastructure.Repositories
 
             // Try to get product from Redis cache
             var cachedData = await _cache.GetStringAsync(cacheKey);
-
             if (!string.IsNullOrEmpty(cachedData))
             {
                 var productFromCache = JsonSerializer.Deserialize<Product>(cachedData);
@@ -43,24 +46,30 @@ namespace Infrastructure.Repositories
                     return productFromCache;
             }
 
-            // Simulate a delay to show benefit of caching
+            // Simulate a delay to show benefit of caching (only happens when not cached)
             await Task.Delay(2000);
 
-            // Fetch from "data source"
-            var product = _products.FirstOrDefault(p => p.Id == id);
+            // Fetch from PostgreSQL using EF Core
+            var product = await _context.Products.FindAsync(id);
             if (product == null)
                 return null;
 
             // Store the product in Redis with expiration
             var cacheOptions = new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(3) // Cache for 3 minutes
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(3)
             };
 
             var serializedProduct = JsonSerializer.Serialize(product);
+            await _cache.SetStringAsync(cacheKey, serializedProduct, cacheOptions);
 
-            await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(product), cacheOptions);
+            return product;
+        }
 
+        public async Task<Product> CreateProductAsync(Product product)
+        {
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
             return product;
         }
     }

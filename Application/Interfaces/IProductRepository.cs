@@ -11,5 +11,7 @@ namespace Application.Interfaces
     {
         Task<Product?> GetByIdAsync(int id);
         Task<List<Product>> GetAllAsync();
+
+        Task<Product> CreateProductAsync(Product product);
     }
 }
