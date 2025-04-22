@@ -12,10 +12,4 @@ namespace Domain.Entities
         public string? Name { get; set; }
         public int Price { get; set; }
     }
-
-    public class Me
-    {
-        public int ID { get; set; }
-    }
-
 }
