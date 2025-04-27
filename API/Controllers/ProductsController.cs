@@ -36,5 +36,13 @@ namespace API.Controllers
             var result = await _mediator.Send(new GetProductByIdQuery(id));
             return result is not null ? Ok(result) : NotFound();
         }
+
+
+        [HttpGet]
+        public async Task<ActionResult<List<Product>>> GetAllProducts()
+        {
+            var products = await _mediator.Send(new GetAllProductsQuery());
+            return Ok(products);
+        }
     }
 }

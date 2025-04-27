@@ -1,6 +1,7 @@
 ﻿using Application.Interfaces;
 using Domain.Entities;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -27,10 +28,36 @@ namespace Infrastructure.Repositories
             _context = context;
         }
 
-        public Task<List<Product>> GetAllAsync()
+        public async Task<List<Product>> GetAllAsync()
         {
-            // Directly return the list as it's static (no need for caching)
-            return Task.FromResult(_products);
+            string cacheKey = "product:all";
+
+            // Try to get products list from Redis
+            var cachedData = await _cache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                var productsFromCache = JsonSerializer.Deserialize<List<Product>>(cachedData);
+                if (productsFromCache != null)
+                    return productsFromCache;
+            }
+
+            // Simulate delay ONLY when fetching from database
+            await Task.Delay(2000);
+
+            // Fetch from PostgreSQL (your real database now)
+            var productsFromDb = await _context.Products.ToListAsync();
+
+            // Store in Redis
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(3) // Cache for 3 minutes
+            };
+
+            var serializedProducts = JsonSerializer.Serialize(productsFromDb);
+            await _cache.SetStringAsync(cacheKey, serializedProducts, cacheOptions);
+
+            return productsFromDb;
         }
 
         public async Task<Product?> GetByIdAsync(int id)
@@ -70,6 +97,26 @@ namespace Infrastructure.Repositories
         {
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
+
+            // Update the cached product list if it exists
+            var cachedData = await _cache.GetStringAsync("product:all");
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                var cachedList = JsonSerializer.Deserialize<List<Product>>(cachedData);
+                if (cachedList != null)
+                {
+                    cachedList.Add(product);
+
+                    var cacheOptions = new DistributedCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(3)
+                    };
+
+                    var updatedSerializedList = JsonSerializer.Serialize(cachedList);
+                    await _cache.SetStringAsync("product:all", updatedSerializedList, cacheOptions);
+                }
+            }
+
             return product;
         }
     }
